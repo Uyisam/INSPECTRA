@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Text, Float, ForeignKey
-
 from backend.database.connection import Base
 
 
@@ -65,18 +64,46 @@ class Finding(Base):
         nullable=True
     )
 
+    # ---------------------------------------------------------
+    # Finding status
+    # ---------------------------------------------------------
+
     status = Column(
         String(30),
         default="open",
         nullable=False
     )
 
+    # ---------------------------------------------------------
+    # Risk intelligence
+    # ---------------------------------------------------------
+
     risk_score = Column(
         Float,
         nullable=True
     )
-    
+
     priority = Column(
         String(10),
+        nullable=True
+    )
+
+    base_cvss = Column(
+        Float,
+        nullable=True
+    )
+
+    criticality_adjustment = Column(
+        Float,
+        nullable=True
+    )
+
+    environment_adjustment = Column(
+        Float,
+        nullable=True
+    )
+
+    internet_exposure_adjustment = Column(
+        Float,
         nullable=True
     )
