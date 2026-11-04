@@ -40,10 +40,14 @@ export async function getScans() {
 }
 
 
-export async function getFindings() {
-  const response = await fetch(
-    `${API_BASE_URL}/findings/`
-  );
+export async function getFindings(
+  latestOnly: boolean = false
+) {
+  const url = latestOnly
+    ? `${API_BASE_URL}/findings/?latest=true`
+    : `${API_BASE_URL}/findings/`;
+
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error("Failed to fetch findings");
@@ -357,6 +361,22 @@ export async function updateNotificationReadStatus(
       errorData?.detail ||
         "Failed to update notification"
     );
+  }
+
+  return response.json();
+}
+
+export async function verifyRemediationTask(taskId: number) {
+  const response = await fetch(
+    `http://127.0.0.1:8000/remediation/${taskId}/verify`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || "Remediation verification failed");
   }
 
   return response.json();

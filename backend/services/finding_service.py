@@ -10,6 +10,8 @@ from backend.services.risk_engine import (
     get_priority
 )
 
+from backend.services.nvd_service import get_cve_details
+
 
 def save_findings(
     db: Session,
@@ -17,15 +19,9 @@ def save_findings(
     findings: list[dict]
 ):
     """
-    Save scanner findings and calculate contextual risk.
-
-    Flow:
-        Finding → Scan → Asset → Risk Engine
+    Save scanner findings, enrich CVE information using NVD,
+    calculate contextual risk, and store vulnerability intelligence.
     """
-
-    # ---------------------------------------------------------
-    # 1. Find the scan
-    # ---------------------------------------------------------
 
     scan = (
         db.query(Scan)
@@ -38,10 +34,6 @@ def save_findings(
             f"Scan {scan_id} not found"
         )
 
-    # ---------------------------------------------------------
-    # 2. Find the asset connected to the scan
-    # ---------------------------------------------------------
-
     asset = (
         db.query(Asset)
         .filter(Asset.id == scan.asset_id)
@@ -53,21 +45,110 @@ def save_findings(
             f"Asset for scan {scan_id} not found"
         )
 
-    # ---------------------------------------------------------
-    # 3. Save findings
-    # ---------------------------------------------------------
-
     saved_findings = []
 
     for item in findings:
 
-        cvss_score = item.get("cvss_score")
-        severity = item.get("severity")
+        vulnerability_id = item.get(
+            "vulnerability_id"
+        )
 
-        # -----------------------------------------------------
+        cvss_score = item.get(
+            "cvss_score"
+        )
+
+        severity = item.get(
+            "severity"
+        )
+
+        title = item.get(
+            "title"
+        )
+
+        description = item.get(
+            "description"
+        )
+
+        primary_url = item.get(
+            "primary_url"
+        )
+
+        # NVD intelligence fields
+        cvss_version = None
+        cvss_vector = None
+        cwes = None
+        published = None
+        last_modified = None
+
+        nvd_data = None
+
+        # Fetch NVD information only for CVE identifiers
+        if (
+            vulnerability_id
+            and vulnerability_id.upper().startswith("CVE-")
+        ):
+            try:
+                nvd_data = get_cve_details(
+                    vulnerability_id
+                )
+
+            except Exception as error:
+                print(
+                    f"NVD enrichment failed for "
+                    f"{vulnerability_id}: {error}"
+                )
+
+        # Apply NVD intelligence
+        if nvd_data:
+
+            if nvd_data.get("cvss_score") is not None:
+                cvss_score = nvd_data.get(
+                    "cvss_score"
+                )
+
+            if nvd_data.get("severity"):
+                severity = nvd_data.get(
+                    "severity"
+                )
+
+            if nvd_data.get("description"):
+                description = nvd_data.get(
+                    "description"
+                )
+
+            cvss_version = nvd_data.get(
+                "cvss_version"
+            )
+
+            cvss_vector = nvd_data.get(
+                "cvss_vector"
+            )
+
+            cwe_list = nvd_data.get(
+                "cwes",
+                []
+            )
+
+            if cwe_list:
+                cwes = ", ".join(cwe_list)
+
+            published = nvd_data.get(
+                "published"
+            )
+
+            last_modified = nvd_data.get(
+                "last_modified"
+            )
+
+            references = nvd_data.get(
+                "references",
+                []
+            )
+
+            if references and not primary_url:
+                primary_url = references[0]
+
         # Calculate contextual risk
-        # -----------------------------------------------------
-
         risk_score = calculate_risk_score(
             cvss_score=cvss_score,
             severity=severity,
@@ -76,10 +157,7 @@ def save_findings(
             internet_exposed=asset.internet_exposed
         )
 
-        # -----------------------------------------------------
-        # Generate risk explanation
-        # -----------------------------------------------------
-
+        # Get detailed risk breakdown
         breakdown = get_risk_breakdown(
             cvss_score=cvss_score,
             severity=severity,
@@ -88,24 +166,16 @@ def save_findings(
             internet_exposed=asset.internet_exposed
         )
 
-        # -----------------------------------------------------
-        # Determine remediation priority
-        # -----------------------------------------------------
-
+        # Convert risk score into remediation priority
         priority = get_priority(
             risk_score
         )
 
-        # -----------------------------------------------------
-        # Create finding
-        # -----------------------------------------------------
-
+        # Create database finding
         finding = Finding(
             scan_id=scan_id,
 
-            vulnerability_id=item.get(
-                "vulnerability_id"
-            ),
+            vulnerability_id=vulnerability_id,
 
             package_name=item.get(
                 "package_name"
@@ -123,17 +193,21 @@ def save_findings(
 
             cvss_score=cvss_score,
 
-            title=item.get(
-                "title"
-            ),
+            cvss_version=cvss_version,
 
-            description=item.get(
-                "description"
-            ),
+            cvss_vector=cvss_vector,
 
-            primary_url=item.get(
-                "primary_url"
-            ),
+            cwes=cwes,
+
+            published=published,
+
+            last_modified=last_modified,
+
+            title=title,
+
+            description=description,
+
+            primary_url=primary_url,
 
             target=item.get(
                 "target"
@@ -141,17 +215,9 @@ def save_findings(
 
             status="open",
 
-            # -------------------------------------------------
-            # Final risk information
-            # -------------------------------------------------
-
             risk_score=risk_score,
 
             priority=priority,
-
-            # -------------------------------------------------
-            # Risk breakdown
-            # -------------------------------------------------
 
             base_cvss=breakdown[
                 "base_cvss"
@@ -176,15 +242,7 @@ def save_findings(
             finding
         )
 
-    # ---------------------------------------------------------
-    # 4. Save everything to database
-    # ---------------------------------------------------------
-
     db.commit()
-
-    # ---------------------------------------------------------
-    # 5. Refresh database objects
-    # ---------------------------------------------------------
 
     for finding in saved_findings:
         db.refresh(finding)

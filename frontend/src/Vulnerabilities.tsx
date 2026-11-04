@@ -8,22 +8,41 @@ type Finding = {
   id: number;
   scan_id: number;
   vulnerability_id: string;
+
   package_name: string;
   installed_version: string;
   fixed_version?: string | null;
+
   severity: string;
+
   cvss_score?: number | null;
+  cvss_version?: string | null;
+  cvss_vector?: string | null;
+
+  cwes?: string | null;
+
+  published?: string | null;
+  last_modified?: string | null;
+
   title?: string | null;
   description?: string | null;
   primary_url?: string | null;
   target?: string | null;
+
   status: string;
+
   risk_score?: number | null;
   priority?: string | null;
+
+  base_cvss?: number | null;
+  criticality_adjustment?: number | null;
+  environment_adjustment?: number | null;
+  internet_exposure_adjustment?: number | null;
 };
 
 function Vulnerabilities() {
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [scanView, setScanView] = useState("latest");
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -40,14 +59,16 @@ function Vulnerabilities() {
     useState("");
 
   useEffect(() => {
-    loadFindings();
-  }, []);
+  loadFindings();
+  }, [scanView]);
 
   async function loadFindings() {
     try {
       setLoading(true);
 
-      const data = await getFindings();
+      const data = await getFindings(
+        scanView === "latest"
+      );
 
       setFindings(data);
 
@@ -117,6 +138,29 @@ function Vulnerabilities() {
     }
   }
 
+  function formatDate(
+    value?: string | null
+  ) {
+    if (!value) {
+      return "—";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString(
+      undefined,
+      {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }
+    );
+  }
+
   const filteredFindings = findings.filter(
     (finding) => {
       const searchText =
@@ -165,17 +209,22 @@ function Vulnerabilities() {
     <div className="vulnerabilities-page">
 
       <div className="vulnerability-header">
+
         <div>
+
           <p className="panel-label">
             SECURITY FINDINGS
           </p>
 
-          <h3>Vulnerabilities</h3>
+          <h3>
+            Vulnerabilities
+          </h3>
 
           <p className="subtitle">
-            Review, prioritize and manage detected
-            security vulnerabilities.
+            Review, prioritize and manage
+            detected security vulnerabilities.
           </p>
+
         </div>
 
         <button
@@ -185,10 +234,27 @@ function Vulnerabilities() {
         >
           ↻ Refresh
         </button>
+
       </div>
 
 
       <div className="vulnerability-toolbar">
+
+        <select
+          value={scanView}
+          onChange={(event) =>
+            setScanView(event.target.value)
+          }
+          aria-label="Filter findings by scan"
+        >
+          <option value="latest">
+            Latest Completed Scan
+          </option>
+
+          <option value="all">
+            All Scans
+          </option>
+        </select>
 
         <input
           type="text"
@@ -225,7 +291,6 @@ function Vulnerabilities() {
             Low
           </option>
         </select>
-
 
         <select
           value={priority}
@@ -264,28 +329,40 @@ function Vulnerabilities() {
       <div className="vulnerability-summary">
 
         <div>
-          <span>Total Findings</span>
+          <span>
+            Total Findings
+          </span>
+
           <strong>
             {findings.length}
           </strong>
         </div>
 
         <div>
-          <span>Showing</span>
+          <span>
+            Showing
+          </span>
+
           <strong>
             {filteredFindings.length}
           </strong>
         </div>
 
         <div>
-          <span>Critical</span>
+          <span>
+            Critical
+          </span>
+
           <strong>
             {criticalCount}
           </strong>
         </div>
 
         <div>
-          <span>High</span>
+          <span>
+            High
+          </span>
+
           <strong>
             {highCount}
           </strong>
@@ -298,13 +375,33 @@ function Vulnerabilities() {
 
         <div className="table-header">
 
-          <span>Vulnerability</span>
-          <span>Package</span>
-          <span>Severity</span>
-          <span>CVSS</span>
-          <span>Risk</span>
-          <span>Priority</span>
-          <span>Status</span>
+          <span>
+            Vulnerability
+          </span>
+
+          <span>
+            Package
+          </span>
+
+          <span>
+            Severity
+          </span>
+
+          <span>
+            CVSS
+          </span>
+
+          <span>
+            Risk
+          </span>
+
+          <span>
+            Priority
+          </span>
+
+          <span>
+            Status
+          </span>
 
         </div>
 
@@ -352,6 +449,7 @@ function Vulnerabilities() {
               >
 
                 <div>
+
                   <strong>
                     {finding.vulnerability_id}
                   </strong>
@@ -360,6 +458,7 @@ function Vulnerabilities() {
                     {finding.title ||
                       "Security vulnerability"}
                   </span>
+
                 </div>
 
 
@@ -384,18 +483,22 @@ function Vulnerabilities() {
 
 
                 <span>
+
                   {finding.cvss_score !== null &&
                   finding.cvss_score !== undefined
                     ? finding.cvss_score.toFixed(1)
                     : "—"}
+
                 </span>
 
 
                 <strong>
+
                   {finding.risk_score !== null &&
                   finding.risk_score !== undefined
                     ? finding.risk_score.toFixed(1)
                     : "—"}
+
                 </strong>
 
 
@@ -473,6 +576,7 @@ function Vulnerabilities() {
             <div className="finding-detail-body">
 
               <div className="finding-title">
+
                 <h5>
                   {selectedFinding.title ||
                     "Security vulnerability"}
@@ -497,15 +601,22 @@ function Vulnerabilities() {
                   </span>
 
                 </div>
+
               </div>
 
+
+              {/* Risk overview */}
 
               <div className="detail-metrics">
 
                 <div>
-                  <span>CVSS</span>
+
+                  <span>
+                    CVSS
+                  </span>
 
                   <strong>
+
                     {selectedFinding.cvss_score !==
                       null &&
                     selectedFinding.cvss_score !==
@@ -514,14 +625,20 @@ function Vulnerabilities() {
                           1
                         )
                       : "—"}
+
                   </strong>
+
                 </div>
 
 
                 <div>
-                  <span>Risk Score</span>
+
+                  <span>
+                    Risk Score
+                  </span>
 
                   <strong>
+
                     {selectedFinding.risk_score !==
                       null &&
                     selectedFinding.risk_score !==
@@ -530,28 +647,222 @@ function Vulnerabilities() {
                           1
                         )
                       : "—"}
+
                   </strong>
+
                 </div>
 
 
                 <div>
-                  <span>Scan</span>
+
+                  <span>
+                    Scan
+                  </span>
 
                   <strong>
                     #{selectedFinding.scan_id}
                   </strong>
+
                 </div>
 
               </div>
 
 
+              {/* NVD intelligence */}
+
               <div className="detail-section">
 
-                <h6>Package Information</h6>
+                <h6>
+                  Vulnerability Intelligence
+                </h6>
 
                 <div className="detail-grid">
 
                   <div>
+
+                    <span>
+                      CVSS Version
+                    </span>
+
+                    <strong>
+                      {selectedFinding.cvss_version ||
+                        "—"}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      CWE
+                    </span>
+
+                    <strong>
+                      {selectedFinding.cwes ||
+                        "—"}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      Published
+                    </span>
+
+                    <strong>
+                      {formatDate(
+                        selectedFinding.published
+                      )}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      Last Modified
+                    </span>
+
+                    <strong>
+                      {formatDate(
+                        selectedFinding.last_modified
+                      )}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+
+                {selectedFinding.cvss_vector && (
+
+                  <div className="detail-wide-field">
+
+                    <span>
+                      CVSS Vector
+                    </span>
+
+                    <code>
+                      {selectedFinding.cvss_vector}
+                    </code>
+
+                  </div>
+
+                )}
+
+              </div>
+
+
+              {/* Risk calculation */}
+
+              <div className="detail-section">
+
+                <h6>
+                  Risk Calculation
+                </h6>
+
+                <div className="detail-grid">
+
+                  <div>
+
+                    <span>
+                      Base CVSS
+                    </span>
+
+                    <strong>
+                      {selectedFinding.base_cvss !==
+                        null &&
+                      selectedFinding.base_cvss !==
+                        undefined
+                        ? selectedFinding.base_cvss.toFixed(
+                            1
+                          )
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      Asset Criticality
+                    </span>
+
+                    <strong>
+                      {selectedFinding.criticality_adjustment !==
+                        null &&
+                      selectedFinding.criticality_adjustment !==
+                        undefined
+                        ? `+${selectedFinding.criticality_adjustment.toFixed(
+                            1
+                          )}`
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      Environment
+                    </span>
+
+                    <strong>
+                      {selectedFinding.environment_adjustment !==
+                        null &&
+                      selectedFinding.environment_adjustment !==
+                        undefined
+                        ? `+${selectedFinding.environment_adjustment.toFixed(
+                            1
+                          )}`
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      Internet Exposure
+                    </span>
+
+                    <strong>
+                      {selectedFinding.internet_exposure_adjustment !==
+                        null &&
+                      selectedFinding.internet_exposure_adjustment !==
+                        undefined
+                        ? `+${selectedFinding.internet_exposure_adjustment.toFixed(
+                            1
+                          )}`
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* Package information */}
+
+              <div className="detail-section">
+
+                <h6>
+                  Package Information
+                </h6>
+
+                <div className="detail-grid">
+
+                  <div>
+
                     <span>
                       Package
                     </span>
@@ -559,23 +870,25 @@ function Vulnerabilities() {
                     <strong>
                       {selectedFinding.package_name}
                     </strong>
+
                   </div>
 
 
                   <div>
+
                     <span>
                       Installed Version
                     </span>
 
                     <strong>
-                      {
-                        selectedFinding.installed_version
-                      }
+                      {selectedFinding.installed_version}
                     </strong>
+
                   </div>
 
 
                   <div>
+
                     <span>
                       Fixed Version
                     </span>
@@ -584,10 +897,12 @@ function Vulnerabilities() {
                       {selectedFinding.fixed_version ||
                         "No fixed version provided"}
                     </strong>
+
                   </div>
 
 
                   <div>
+
                     <span>
                       Target
                     </span>
@@ -596,6 +911,7 @@ function Vulnerabilities() {
                       {selectedFinding.target ||
                         "Unknown"}
                     </strong>
+
                   </div>
 
                 </div>
@@ -603,9 +919,13 @@ function Vulnerabilities() {
               </div>
 
 
+              {/* Description */}
+
               <div className="detail-section">
 
-                <h6>Description</h6>
+                <h6>
+                  Description
+                </h6>
 
                 <p className="finding-description">
                   {selectedFinding.description ||
@@ -614,6 +934,8 @@ function Vulnerabilities() {
 
               </div>
 
+
+              {/* Remediation */}
 
               <div className="detail-section remediation-section">
 
@@ -662,6 +984,8 @@ function Vulnerabilities() {
 
               </div>
 
+
+              {/* Security reference */}
 
               {selectedFinding.primary_url && (
 

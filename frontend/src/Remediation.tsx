@@ -6,6 +6,7 @@ import {
   createRemediationTask,
   updateRemediationStatus,
   updateRemediationAssignee,
+  verifyRemediationTask,
 } from "./api";
 
 
@@ -56,6 +57,9 @@ function Remediation() {
     useState<number | null>(null);
 
   const [updatingId, setUpdatingId] =
+    useState<number | null>(null);
+
+  const [verifyingId, setVerifyingId] =
     useState<number | null>(null);
 
   const [message, setMessage] =
@@ -269,6 +273,89 @@ function Remediation() {
   }
 
 
+  // =================================
+  // VERIFY REMEDIATION
+  // =================================
+
+  async function verifyTask(
+    taskId: number
+  ) {
+
+    try {
+
+      setVerifyingId(taskId);
+      setMessage(
+        "Verifying remediation with Trivy..."
+      );
+
+      const result =
+        await verifyRemediationTask(
+          taskId
+        );
+
+      if (result.verified) {
+
+        setMessage(
+          "Remediation verified successfully. The vulnerability is no longer detected."
+        );
+
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  status: "resolved",
+                }
+              : task
+          )
+        );
+
+        setFindings((current) =>
+          current.map((finding) =>
+            finding.id ===
+            (
+              tasks.find(
+                (task) =>
+                  task.id === taskId
+              )?.finding_id
+            )
+              ? {
+                  ...finding,
+                  status: "resolved",
+                }
+              : finding
+          )
+        );
+
+      } else {
+
+        setMessage(
+          "Verification completed. The vulnerability is still detected."
+        );
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Failed to verify remediation:",
+        error
+      );
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Remediation verification failed."
+      );
+
+    } finally {
+
+      setVerifyingId(null);
+
+    }
+  }
+
+
   const openCount =
     tasks.filter(
       (task) =>
@@ -442,7 +529,7 @@ function Remediation() {
 
 
       {/* ================================= */}
-      {/* MESSAGE                            */}
+      {/* MESSAGE                           */}
       {/* ================================= */}
 
       {message && (
@@ -455,14 +542,14 @@ function Remediation() {
 
 
       {/* ================================= */}
-      {/* MAIN CONTENT                       */}
+      {/* MAIN CONTENT                      */}
       {/* ================================= */}
 
       <div className="remediation-overview">
 
 
         {/* ================================= */}
-        {/* FINDINGS / TASK QUEUE              */}
+        {/* FINDINGS / TASK QUEUE             */}
         {/* ================================= */}
 
         <div className="panel">
@@ -650,37 +737,64 @@ function Remediation() {
 
                         ) : (
 
-                          <select
-                            value={task.status}
-                            disabled={
-                              updatingId ===
+                          <div className="remediation-task-actions">
+
+                            <select
+                              value={task.status}
+                              disabled={
+                                updatingId ===
+                                task.id ||
+                                verifyingId ===
+                                task.id
+                              }
+                              onChange={(event) =>
+                                changeTaskStatus(
+                                  task.id,
+                                  event.target.value
+                                )
+                              }
+                            >
+
+                              <option value="open">
+                                Open
+                              </option>
+
+                              <option value="in_progress">
+                                In Progress
+                              </option>
+
+                              <option value="resolved">
+                                Resolved
+                              </option>
+
+                              <option value="closed">
+                                Closed
+                              </option>
+
+                            </select>
+
+
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                verifyTask(
+                                  task.id
+                                )
+                              }
+                              disabled={
+                                verifyingId ===
+                                task.id
+                              }
+                            >
+
+                              {verifyingId ===
                               task.id
-                            }
-                            onChange={(event) =>
-                              changeTaskStatus(
-                                task.id,
-                                event.target.value
-                              )
-                            }
-                          >
+                                ? "Verifying..."
+                                : "Verify Fix"}
 
-                            <option value="open">
-                              Open
-                            </option>
+                            </button>
 
-                            <option value="in_progress">
-                              In Progress
-                            </option>
-
-                            <option value="resolved">
-                              Resolved
-                            </option>
-
-                            <option value="closed">
-                              Closed
-                            </option>
-
-                          </select>
+                          </div>
 
                         )}
 
@@ -714,22 +828,41 @@ function Remediation() {
 
                             <input
                               type="text"
-                              value={
-                                task.assignee ||
-                                ""
-                              }
+                              key={task.id}
+                              defaultValue={task.assignee || ""}
                               placeholder="Assign owner"
                               disabled={
-                                updatingId ===
-                                task.id
+                                updatingId === task.id ||
+                                verifyingId === task.id
                               }
                               onBlur={(event) =>
                                 assignTask(
                                   task.id,
-                                  event.target.value
+                                  event.currentTarget.value.trim()
                                 )
                               }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.currentTarget.blur();
+                                }
+                              }}
                             />
+
+                          </div>
+
+
+                          <div>
+
+                            <small>
+                              Verification
+                            </small>
+
+                            <strong>
+                              {task.status ===
+                              "resolved"
+                                ? "Verified"
+                                : "Pending"}
+                            </strong>
 
                           </div>
 
@@ -752,7 +885,7 @@ function Remediation() {
 
 
         {/* ================================= */}
-        {/* SECURITY POSTURE                   */}
+        {/* SECURITY POSTURE                  */}
         {/* ================================= */}
 
         <div className="panel remediation-summary-panel">
@@ -875,9 +1008,10 @@ function Remediation() {
               converted into a tracked remediation
               task. Tasks can then be assigned,
               moved through Open, In Progress,
-              Resolved and Closed states, and
-              stored directly in the Inspectra
-              backend.
+              Resolved and Closed states. Inspectra
+              can also re-scan the affected asset
+              with Trivy to verify whether the
+              vulnerability has actually been fixed.
             </p>
 
           </div>

@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from backend.database.connection import SessionLocal
 from backend.models.finding import Finding
+from backend.models.scan import Scan
 from backend.schemas.finding import FindingResponse
 
 
@@ -15,7 +17,6 @@ router = APIRouter(
 
 def get_db():
     db = SessionLocal()
-
     try:
         yield db
     finally:
@@ -26,26 +27,40 @@ class FindingStatusUpdate(BaseModel):
     status: str
 
 
-@router.get(
-    "/",
-    response_model=list[FindingResponse]
-)
+@router.get("/", response_model=list[FindingResponse])
 def get_findings(
+    latest: bool = Query(default=False),
     db: Session = Depends(get_db)
 ):
-    findings = (
-        db.query(Finding)
-        .order_by(Finding.risk_score.desc())
-        .all()
-    )
+    query = db.query(Finding)
 
-    return findings
+    if latest:
+        latest_scan = (
+            db.query(Scan)
+            .filter(
+                Scan.status == "completed",
+                Scan.completed_at.isnot(None)
+            )
+            .order_by(
+                Scan.completed_at.desc(),
+                Scan.id.desc()
+            )
+            .first()
+        )
+
+        if latest_scan is None:
+            return []
+
+        query = query.filter(
+            Finding.scan_id == latest_scan.id
+        )
+
+    return query.order_by(
+        Finding.risk_score.desc()
+    ).all()
 
 
-@router.get(
-    "/{finding_id}",
-    response_model=FindingResponse
-)
+@router.get("/{finding_id}", response_model=FindingResponse)
 def get_finding(
     finding_id: int,
     db: Session = Depends(get_db)
@@ -65,10 +80,7 @@ def get_finding(
     return finding
 
 
-@router.patch(
-    "/{finding_id}/status",
-    response_model=FindingResponse
-)
+@router.patch("/{finding_id}/status", response_model=FindingResponse)
 def update_finding_status(
     finding_id: int,
     update: FindingStatusUpdate,
@@ -83,10 +95,7 @@ def update_finding_status(
     if update.status not in allowed_statuses:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid status. "
-                "Use open, in_progress or resolved."
-            )
+            detail="Invalid status. Use open, in_progress or resolved."
         )
 
     finding = (
@@ -102,7 +111,6 @@ def update_finding_status(
         )
 
     finding.status = update.status
-
     db.commit()
     db.refresh(finding)
 

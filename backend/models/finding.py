@@ -44,6 +44,31 @@ class Finding(Base):
         nullable=True
     )
 
+    cvss_version = Column(
+        String(10),
+        nullable=True
+    )
+
+    cvss_vector = Column(
+        String(200),
+        nullable=True
+    )
+
+    cwes = Column(
+        Text,
+        nullable=True
+    )
+
+    published = Column(
+        String(50),
+        nullable=True
+    )
+
+    last_modified = Column(
+        String(50),
+        nullable=True
+    )
+
     title = Column(
         Text,
         nullable=True
@@ -64,19 +89,11 @@ class Finding(Base):
         nullable=True
     )
 
-    # ---------------------------------------------------------
-    # Finding status
-    # ---------------------------------------------------------
-
     status = Column(
         String(30),
         default="open",
         nullable=False
     )
-
-    # ---------------------------------------------------------
-    # Risk intelligence
-    # ---------------------------------------------------------
 
     risk_score = Column(
         Float,

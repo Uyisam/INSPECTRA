@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 from backend.database.connection import SessionLocal
 from backend.models.remediation import RemediationTask
 from backend.models.finding import Finding
+from backend.services.remediation_verifier import (
+    verify_finding_remediation
+)
 
 
 router = APIRouter(
@@ -55,7 +58,9 @@ def create_remediation_task(
 ):
     finding = (
         db.query(Finding)
-        .filter(Finding.id == task.finding_id)
+        .filter(
+            Finding.id == task.finding_id
+        )
         .first()
     )
 
@@ -111,7 +116,9 @@ def get_remediation_task(
 ):
     task = (
         db.query(RemediationTask)
-        .filter(RemediationTask.id == task_id)
+        .filter(
+            RemediationTask.id == task_id
+        )
         .first()
     )
 
@@ -125,7 +132,7 @@ def get_remediation_task(
 
 
 # ==========================================
-# UPDATE STATUS
+# UPDATE REMEDIATION STATUS
 # ==========================================
 
 @router.patch("/{task_id}/status")
@@ -145,15 +152,16 @@ def update_remediation_status(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Invalid status. "
-                "Use open, in_progress, "
-                "resolved or closed."
+                "Invalid status. Use "
+                "open, in_progress, resolved or closed."
             )
         )
 
     task = (
         db.query(RemediationTask)
-        .filter(RemediationTask.id == task_id)
+        .filter(
+            RemediationTask.id == task_id
+        )
         .first()
     )
 
@@ -173,7 +181,7 @@ def update_remediation_status(
 
 
 # ==========================================
-# ASSIGN TASK
+# UPDATE ASSIGNEE
 # ==========================================
 
 @router.patch("/{task_id}/assignee")
@@ -184,7 +192,9 @@ def update_remediation_assignee(
 ):
     task = (
         db.query(RemediationTask)
-        .filter(RemediationTask.id == task_id)
+        .filter(
+            RemediationTask.id == task_id
+        )
         .first()
     )
 
@@ -201,3 +211,88 @@ def update_remediation_assignee(
     db.refresh(task)
 
     return task
+
+
+# ==========================================
+# VERIFY REMEDIATION
+# ==========================================
+
+@router.post("/{task_id}/verify")
+def verify_remediation(
+    task_id: int,
+    db: Session = Depends(get_db)
+):
+    task = (
+        db.query(RemediationTask)
+        .filter(
+            RemediationTask.id == task_id
+        )
+        .first()
+    )
+
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail="Remediation task not found"
+        )
+
+    try:
+
+        result = verify_finding_remediation(
+            db=db,
+            finding_id=task.finding_id
+        )
+
+        # --------------------------------------
+        # VULNERABILITY VERIFIED AS FIXED
+        # --------------------------------------
+
+        if result["verified"]:
+
+            task.status = "resolved"
+
+            finding = (
+                db.query(Finding)
+                .filter(
+                    Finding.id == task.finding_id
+                )
+                .first()
+            )
+
+            if finding:
+                finding.status = "resolved"
+
+            task.updated_at = datetime.utcnow()
+
+            db.commit()
+            db.refresh(task)
+
+            result["remediation_task_id"] = (
+                task.id
+            )
+
+            result["status"] = "resolved"
+
+        # --------------------------------------
+        # VULNERABILITY STILL EXISTS
+        # --------------------------------------
+
+        else:
+
+            result["remediation_task_id"] = (
+                task.id
+            )
+
+            result["status"] = task.status
+
+        return result
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Remediation verification failed: "
+                f"{str(error)}"
+            )
+        )
