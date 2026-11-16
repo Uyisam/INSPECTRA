@@ -2912,3 +2912,27 @@ button {
   }
 
 }
+/* PROJECT AND ASSET FORM INPUTS */
+.modal-body input:not([type="checkbox"]),
+.modal-body textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: #080f1c;
+  color: #e5edf8;
+  border: 1px solid #22324b;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.modal-body input::placeholder,
+.modal-body textarea::placeholder {
+  color: #536681;
+}
+
+.modal-body input:focus,
+.modal-body textarea:focus {
+  outline: none;
+  border-color: #326df4;
+}

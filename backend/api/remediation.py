@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,9 +59,7 @@ def create_remediation_task(
 ):
     finding = (
         db.query(Finding)
-        .filter(
-            Finding.id == task.finding_id
-        )
+        .filter(Finding.id == task.finding_id)
         .first()
     )
 
@@ -94,15 +93,11 @@ def create_remediation_task(
 def get_remediation_tasks(
     db: Session = Depends(get_db)
 ):
-    tasks = (
+    return (
         db.query(RemediationTask)
-        .order_by(
-            RemediationTask.created_at.desc()
-        )
+        .order_by(RemediationTask.created_at.desc())
         .all()
     )
-
-    return tasks
 
 
 # ==========================================
@@ -116,9 +111,7 @@ def get_remediation_task(
 ):
     task = (
         db.query(RemediationTask)
-        .filter(
-            RemediationTask.id == task_id
-        )
+        .filter(RemediationTask.id == task_id)
         .first()
     )
 
@@ -151,17 +144,12 @@ def update_remediation_status(
     if update.status not in allowed_statuses:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid status. Use "
-                "open, in_progress, resolved or closed."
-            )
+            detail="Invalid status. Use open, in_progress, resolved or closed."
         )
 
     task = (
         db.query(RemediationTask)
-        .filter(
-            RemediationTask.id == task_id
-        )
+        .filter(RemediationTask.id == task_id)
         .first()
     )
 
@@ -169,6 +157,18 @@ def update_remediation_status(
         raise HTTPException(
             status_code=404,
             detail="Remediation task not found"
+        )
+
+    if update.status == "resolved":
+        raise HTTPException(
+            status_code=400,
+            detail="Remediation must be verified using Trivy before it can be resolved."
+        )
+
+    if update.status == "closed" and task.status != "resolved":
+        raise HTTPException(
+            status_code=400,
+            detail="Only verified and resolved tasks can be closed."
         )
 
     task.status = update.status
@@ -192,9 +192,7 @@ def update_remediation_assignee(
 ):
     task = (
         db.query(RemediationTask)
-        .filter(
-            RemediationTask.id == task_id
-        )
+        .filter(RemediationTask.id == task_id)
         .first()
     )
 
@@ -224,9 +222,7 @@ def verify_remediation(
 ):
     task = (
         db.query(RemediationTask)
-        .filter(
-            RemediationTask.id == task_id
-        )
+        .filter(RemediationTask.id == task_id)
         .first()
     )
 
@@ -237,25 +233,17 @@ def verify_remediation(
         )
 
     try:
-
         result = verify_finding_remediation(
             db=db,
             finding_id=task.finding_id
         )
 
-        # --------------------------------------
-        # VULNERABILITY VERIFIED AS FIXED
-        # --------------------------------------
-
         if result["verified"]:
-
             task.status = "resolved"
 
             finding = (
                 db.query(Finding)
-                .filter(
-                    Finding.id == task.finding_id
-                )
+                .filter(Finding.id == task.finding_id)
                 .first()
             )
 
@@ -267,32 +255,19 @@ def verify_remediation(
             db.commit()
             db.refresh(task)
 
-            result["remediation_task_id"] = (
-                task.id
-            )
-
+            result["remediation_task_id"] = task.id
             result["status"] = "resolved"
 
-        # --------------------------------------
-        # VULNERABILITY STILL EXISTS
-        # --------------------------------------
-
         else:
-
-            result["remediation_task_id"] = (
-                task.id
-            )
-
+            result["remediation_task_id"] = task.id
             result["status"] = task.status
 
         return result
 
     except Exception as error:
+        db.rollback()
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Remediation verification failed: "
-                f"{str(error)}"
-            )
+            detail=f"Remediation verification failed: {str(error)}"
         )

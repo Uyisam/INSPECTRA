@@ -28,3 +28,12 @@ Thumbs.db
 
 # VS Code local settings
 .vscode/
+data/verification-test/node_modules/
+
+# Node dependencies
+node_modules/
+
+# Local backups and generated scan output
+*.bak
+*.backup
+trivy-check.json

@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,19 +34,14 @@ def get_db():
 # CREATE SCAN
 # ==========================================
 
-@router.post(
-    "/",
-    response_model=ScanResponse
-)
+@router.post("/", response_model=ScanResponse)
 def create_scan(
     scan: ScanCreate,
     db: Session = Depends(get_db)
 ):
     asset = (
         db.query(Asset)
-        .filter(
-            Asset.id == scan.asset_id
-        )
+        .filter(Asset.id == scan.asset_id)
         .first()
     )
 
@@ -72,41 +68,23 @@ def create_scan(
 # GET ALL SCANS
 # ==========================================
 
-@router.get(
-    "/",
-    response_model=list[ScanResponse]
-)
-def get_scans(
-    db: Session = Depends(get_db)
-):
-    scans = (
-        db.query(Scan)
-        .all()
-    )
-
-    return scans
+@router.get("/", response_model=list[ScanResponse])
+def get_scans(db: Session = Depends(get_db)):
+    return db.query(Scan).all()
 
 
 # ==========================================
 # RUN SCAN
 # ==========================================
 
-@router.post(
-    "/{scan_id}/run"
-)
+@router.post("/{scan_id}/run")
 def run_scan(
     scan_id: int,
     db: Session = Depends(get_db)
 ):
-    # --------------------------------------
-    # FIND SCAN
-    # --------------------------------------
-
     scan = (
         db.query(Scan)
-        .filter(
-            Scan.id == scan_id
-        )
+        .filter(Scan.id == scan_id)
         .first()
     )
 
@@ -116,15 +94,9 @@ def run_scan(
             detail="Scan not found"
         )
 
-    # --------------------------------------
-    # FIND ASSET
-    # --------------------------------------
-
     asset = (
         db.query(Asset)
-        .filter(
-            Asset.id == scan.asset_id
-        )
+        .filter(Asset.id == scan.asset_id)
         .first()
     )
 
@@ -133,10 +105,6 @@ def run_scan(
             status_code=404,
             detail="Asset not found"
         )
-
-    # --------------------------------------
-    # VALIDATE ASSET TYPE
-    # --------------------------------------
 
     if asset.asset_type != "filesystem":
         raise HTTPException(
@@ -147,38 +115,43 @@ def run_scan(
             )
         )
 
-    # --------------------------------------
-    # MARK SCAN AS RUNNING
-    # --------------------------------------
-
-    scan.status = "running"
-    scan.started_at = datetime.utcnow()
-
-    db.commit()
-
-    # --------------------------------------
-    # RUN TRIVY
-    # --------------------------------------
-
-    try:
-
-        results = run_trivy_scan(
-            asset.target
+    # Atomically claim the scan.
+    # Only pending or failed scans can be started.
+    updated_rows = (
+        db.query(Scan)
+        .filter(
+            Scan.id == scan_id,
+            Scan.status.in_(["pending", "failed"])
         )
+        .update(
+            {
+                "status": "running",
+                "started_at": datetime.utcnow(),
+                "completed_at": None
+            },
+            synchronize_session=False
+        )
+    )
 
-        # ----------------------------------
-        # PARSE TRIVY RESULTS
-        # ----------------------------------
+    if updated_rows == 0:
+        db.refresh(scan)
 
-        parsed_findings = (
-            parse_trivy_findings(
-                results
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Scan cannot be started because its "
+                f"current status is '{scan.status}'. "
+                "Only pending or failed scans can run."
             )
         )
 
-        # ----------------------------------
-        # SAVE FINDINGS
-        # ----------------------------------
+    db.commit()
+    db.refresh(scan)
+
+    try:
+        results = run_trivy_scan(asset.target)
+
+        parsed_findings = parse_trivy_findings(results)
 
         saved_findings = save_findings(
             db=db,
@@ -186,43 +159,22 @@ def run_scan(
             findings=parsed_findings
         )
 
-        # ----------------------------------
-        # CREATE SECURITY NOTIFICATIONS
-        # ----------------------------------
-
         for finding in saved_findings:
-
-            if finding.severity in {
-                "CRITICAL",
-                "HIGH"
-            }:
-
+            if finding.severity in {"CRITICAL", "HIGH"}:
                 create_notification(
                     db=db,
-
                     title=(
                         f"{finding.severity} "
-                        f"vulnerability detected"
+                        "vulnerability detected"
                     ),
-
                     message=(
                         f"{finding.vulnerability_id} "
-                        f"was detected in "
-                        f"{finding.package_name} "
-                        f"with risk score "
-                        f"{finding.risk_score}."
+                        f"was detected in {finding.package_name} "
+                        f"with risk score {finding.risk_score}."
                     ),
-
-                    notification_type=(
-                        "vulnerability"
-                    ),
-
+                    notification_type="vulnerability",
                     severity=finding.severity
                 )
-
-        # ----------------------------------
-        # MARK SCAN AS COMPLETED
-        # ----------------------------------
 
         scan.status = "completed"
         scan.completed_at = datetime.utcnow()
@@ -230,40 +182,28 @@ def run_scan(
         db.commit()
 
         return {
-            "message": (
-                "Scan completed successfully"
-            ),
-
+            "message": "Scan completed successfully",
             "scan_id": scan.id,
-
             "status": scan.status,
-
-            "targets": len(
-                results.get(
-                    "Results",
-                    []
-                )
-            ),
-
-            "vulnerabilities": len(
-                saved_findings
-            )
+            "targets": len(results.get("Results", [])),
+            "vulnerabilities": len(saved_findings)
         }
 
-    # --------------------------------------
-    # HANDLE SCAN FAILURE
-    # --------------------------------------
-
     except Exception as error:
+        db.rollback()
 
-        scan.status = "failed"
-        scan.completed_at = datetime.utcnow()
+        failed_scan = (
+            db.query(Scan)
+            .filter(Scan.id == scan_id)
+            .first()
+        )
 
-        db.commit()
+        if failed_scan and failed_scan.status == "running":
+            failed_scan.status = "failed"
+            failed_scan.completed_at = datetime.utcnow()
+            db.commit()
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"Scan failed: {str(error)}"
-            )
+            detail=f"Scan failed: {str(error)}"
         )

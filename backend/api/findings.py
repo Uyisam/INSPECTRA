@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -110,8 +109,22 @@ def update_finding_status(
             detail="Finding not found"
         )
 
+    if update.status == "resolved":
+        raise HTTPException(
+            status_code=400,
+            detail="Findings can only be resolved through verified remediation."
+        )
+
     finding.status = update.status
-    db.commit()
-    db.refresh(finding)
+
+    try:
+        db.commit()
+        db.refresh(finding)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update finding status."
+        )
 
     return finding

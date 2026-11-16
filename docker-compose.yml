@@ -1,0 +1,28 @@
+﻿services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inspectra-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////app/data/inspectra.db
+      FRONTEND_ORIGINS: http://localhost:8081
+      SCAN_ROOT: /scan
+      SCAN_HOST_ROOT: 'C:\Users\MONISH RM\OneDrive\Desktop\INSPECTRA'
+    volumes:
+      - ./docker-data:/app/data
+      - ./:/scan:ro
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: inspectra-frontend
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend

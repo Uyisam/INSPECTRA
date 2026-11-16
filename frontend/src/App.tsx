@@ -12,12 +12,16 @@ import {
 import Vulnerabilities from "./Vulnerabilities";
 import Remediation from "./Remediation";
 import Notifications from "./Notifications";
+import Projects from "./Projects";
+import Assets from "./Assets";
 
 import "./App.css";
 
 
 type Page =
   | "dashboard"
+  | "projects"
+  | "assets"
   | "vulnerabilities"
   | "remediation"
   | "notifications";
@@ -370,7 +374,31 @@ function App() {
           <p className="nav-section-title">
             PLATFORM
           </p>
+          {/* PROJECTS */}
+          <button
+            className={
+              currentPage === "projects"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => setCurrentPage("projects")}
+          >
+            <span className="nav-icon">▦</span>
+            Projects
+          </button>
 
+          {/* ASSETS */}
+          <button
+            className={
+              currentPage === "assets"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => setCurrentPage("assets")}
+          >
+            <span className="nav-icon">◇</span>
+            Assets
+          </button>
 
           {/* DASHBOARD */}
 
@@ -523,6 +551,9 @@ function App() {
                 "dashboard" &&
                 "Security Dashboard"}
 
+              {currentPage === "projects" && "Project Management"}
+
+              {currentPage === "assets" && "Asset Management"}
 
               {currentPage ===
                 "vulnerabilities" &&
@@ -1018,6 +1049,23 @@ function App() {
 
           </div>
 
+        )}
+
+                {/* PROJECTS */}
+        {currentPage === "projects" && (
+          <Projects
+            projects={projects}
+            onRefresh={loadDashboardData}
+          />
+        )}
+
+        {/* ASSETS */}
+        {currentPage === "assets" && (
+          <Assets
+            projects={projects}
+            assets={assets}
+            onRefresh={loadDashboardData}
+          />
         )}
 
 

@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 
 export async function getProjects() {
@@ -368,7 +368,7 @@ export async function updateNotificationReadStatus(
 
 export async function verifyRemediationTask(taskId: number) {
   const response = await fetch(
-    `http://127.0.0.1:8000/remediation/${taskId}/verify`,
+    `${API_BASE_URL}/remediation/${taskId}/verify`,
     {
       method: "POST",
     }
@@ -377,6 +377,46 @@ export async function verifyRemediationTask(taskId: number) {
   if (!response.ok) {
     const error = await response.text();
     throw new Error(error || "Remediation verification failed");
+  }
+
+  return response.json();
+}
+export async function createProject(
+  name: string,
+  description: string
+) {
+  const response = await fetch(`${API_BASE_URL}/projects/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.detail || "Failed to create project");
+  }
+
+  return response.json();
+}
+
+export async function createAsset(asset: {
+  name: string;
+  asset_type: string;
+  target: string;
+  project_id: number;
+  criticality: string;
+  environment: string;
+  internet_exposed: boolean;
+}) {
+  const response = await fetch(`${API_BASE_URL}/assets/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(asset),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.detail || "Failed to create asset");
   }
 
   return response.json();

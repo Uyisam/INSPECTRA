@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.database.connection import SessionLocal
 from backend.models.asset import Asset
+from backend.models.project import Project
 from backend.schemas.asset import AssetCreate, AssetResponse
 
 
@@ -14,21 +15,29 @@ router = APIRouter(
 
 def get_db():
     db = SessionLocal()
-
     try:
         yield db
     finally:
         db.close()
 
 
-@router.post(
-    "/",
-    response_model=AssetResponse
-)
+@router.post("/", response_model=AssetResponse)
 def create_asset(
     asset: AssetCreate,
     db: Session = Depends(get_db)
 ):
+    project = (
+        db.query(Project)
+        .filter(Project.id == asset.project_id)
+        .first()
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
     new_asset = Asset(
         name=asset.name,
         asset_type=asset.asset_type,
@@ -46,16 +55,6 @@ def create_asset(
     return new_asset
 
 
-@router.get(
-    "/",
-    response_model=list[AssetResponse]
-)
-def get_assets(
-    db: Session = Depends(get_db)
-):
-    assets = (
-        db.query(Asset)
-        .all()
-    )
-
-    return assets
+@router.get("/", response_model=list[AssetResponse])
+def get_assets(db: Session = Depends(get_db)):
+    return db.query(Asset).all()

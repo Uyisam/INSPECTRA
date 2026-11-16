@@ -1,7 +1,12 @@
+
+import math
+
+
 def extract_cvss_score(vulnerability: dict):
     """
-    Extract the CVSS score from Trivy vulnerability data.
-    Trivy can provide CVSS information from different sources.
+    Extract the highest valid CVSS score from Trivy data.
+
+    Supports CVSS 4.0, 3.x and 2.0.
     """
 
     cvss_data = vulnerability.get("CVSS") or {}
@@ -12,21 +17,26 @@ def extract_cvss_score(vulnerability: dict):
         if not isinstance(source_data, dict):
             continue
 
-        score = source_data.get("V3Score")
+        # Prefer the newest CVSS version available from this source.
+        score = (
+            source_data.get("V4Score")
+            or source_data.get("V3Score")
+            or source_data.get("V2Score")
+        )
 
         if score is None:
-            score = source_data.get("V2Score")
+            continue
 
-        if score is not None:
-            try:
-                scores.append(float(score))
-            except (TypeError, ValueError):
-                pass
+        try:
+            score = float(score)
 
-    if scores:
-        return max(scores)
+            if math.isfinite(score) and 0.0 <= score <= 10.0:
+                scores.append(score)
 
-    return None
+        except (TypeError, ValueError):
+            continue
+
+    return max(scores) if scores else None
 
 
 def parse_trivy_findings(scan_results: dict):

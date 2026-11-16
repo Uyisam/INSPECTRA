@@ -1,0 +1,12 @@
+﻿venv/
+frontend/node_modules/
+frontend/dist/
+data/verification-test/node_modules/
+.git/
+__pycache__/
+*.pyc
+*.db
+*.7z
+*.bak
+*.backup
+trivy-check.json
