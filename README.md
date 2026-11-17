@@ -58,16 +58,18 @@ Inspectra is a vulnerability management platform designed to help identify, anal
 1. **Dashboard** – Overview of projects and vulnerability information.
 2. **Projects** – Manage security projects.
 3. **Assets** – Register repositories and filesystem targets.
-4. **Scans** – Run and review vulnerability scans.
-5. **Vulnerabilities** – Review and track detected security findings.
-6. **Remediation** – Manage remediation tasks and verify fixes.
-7. **Notifications** – View application notifications.
+4. **Vulnerabilities** – Review and track detected security findings.
+5. **Remediation** – Manage remediation tasks and verify fixes.
+6. **Notifications** – View application notifications.
+
+**Backend API:** Includes scan creation and scan history endpoints.
 
 ## Prerequisites
 
-- Docker Desktop
+- Docker Desktop with Docker Compose
 - Git
 - GitHub account (for repository access)
+- Trivy (required for local scanning; Docker deployment should use the configured scanner environment)
 
 ## Installation and Setup
 
@@ -133,6 +135,7 @@ INSPECTRA/
 │   ├── api/
 │   ├── database/
 │   ├── models/
+│   ├── schemas/
 │   └── services/
 ├── data/
 ├── docker-data/
@@ -145,7 +148,13 @@ INSPECTRA/
 
 ## Current Implementation Status
 
-The application has been run using Docker Compose. Backend API endpoints and frontend pages have been checked. Trivy scanning and remediation verification have also been tested.
+- Docker Compose deployment tested successfully.
+- Backend API endpoints verified.
+- Frontend production build completed successfully.
+- All six frontend sections checked.
+- Trivy vulnerability scanning tested.
+- Remediation task management and verification tested.
+- GitHub Actions CI workflow executed successfully.
 
 ## Future Improvements
 
