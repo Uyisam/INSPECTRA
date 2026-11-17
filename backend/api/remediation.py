@@ -210,7 +210,6 @@ def update_remediation_assignee(
 
     return task
 
-
 # ==========================================
 # VERIFY REMEDIATION
 # ==========================================
@@ -232,6 +231,18 @@ def verify_remediation(
             detail="Remediation task not found"
         )
 
+    finding = (
+        db.query(Finding)
+        .filter(Finding.id == task.finding_id)
+        .first()
+    )
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
     try:
         result = verify_finding_remediation(
             db=db,
@@ -240,27 +251,24 @@ def verify_remediation(
 
         if result["verified"]:
             task.status = "resolved"
+            finding.status = "resolved"
 
-            finding = (
-                db.query(Finding)
-                .filter(Finding.id == task.finding_id)
-                .first()
-            )
-
-            if finding:
-                finding.status = "resolved"
-
-            task.updated_at = datetime.utcnow()
-
-            db.commit()
-            db.refresh(task)
-
-            result["remediation_task_id"] = task.id
             result["status"] = "resolved"
 
         else:
-            result["remediation_task_id"] = task.id
-            result["status"] = task.status
+            task.status = "in_progress"
+            finding.status = "open"
+
+            result["status"] = "in_progress"
+
+        task.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(task)
+        db.refresh(finding)
+
+        result["remediation_task_id"] = task.id
+        result["finding_status"] = finding.status
 
         return result
 

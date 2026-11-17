@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -143,11 +144,19 @@ def verify_finding_remediation(
                 )
             )
 
+            target = (
+                item.get(
+                    "target"
+                )
+            )
+
             if (
                 vulnerability_id
                 == finding.vulnerability_id
                 and package_name
                 == finding.package_name
+                and target
+                == finding.target
             ):
 
                 matching_findings.append(
@@ -165,7 +174,6 @@ def verify_finding_remediation(
         verification_scan.completed_at = (
             datetime.utcnow()
         )
-
         db.commit()
         db.refresh(verification_scan)
 
